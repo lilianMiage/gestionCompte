@@ -1,69 +1,96 @@
 services:
   # Service MySQL
   db:
-    image: mysql:latest
+    # Version de l'image mysql
+    image: mysql:8.4.3
+    # Permet que le conteneur se redémarre tout le temps s'il est dans l'état stop
     restart: always
+    # Permet de renommer le conteneur
     container_name: mysql_db
+    # Permet de faire le lien avec le fichier qui stocke les variables d'environnement
     env_file:
       - "configmap.env"
+    # Variables d'environnement recupéré par secret
     environment:
       MYSQL_PASSWORD_FILE: /run/secrets/mysql_db_password
+      MYSQL_ROOT_PASSWORD_FILE: /run/secrets/mysql_db_root_password
     secrets:
       - mysql_db_password
       - mysql_db_root_password
+    # Port exposé de la base de données
     ports:
       - '3307:3306'
     volumes:
       - mysql_data:/var/lib/mysql
+      # Volumes qui permet de charger le dump de la base de données
+      - ./script:/docker-entrypoint-initdb.d
+    # Réseaux sur lequel sont connectés les base de données mysql
     networks:
       - database
-      - backend
+    # Permet de voir si la base données est up ou pas grâce à la commande linux ping
     healthcheck:
-      test: ["CMD", "mysqladmin", "ping", "-h", "localhost"]
+      test: [ "CMD", "mysqladmin", "ping", "-h", "localhost" ]
       timeout: 20s
       retries: 10
 
-  # Application Spring Boot v1
-  spring-appv1:
-    build:
-      context: .
-      dockerfile: Dockerfile
-    container_name: app_v1
-    ports:
-      - "8081:8080"
-    depends_on:
-      - db
-    env_file:
-      - "configmap.env"
-    environment:
-      SPRING_DATASOURCE_PASSWORD_FILE: /run/secrets/mysql_db_password
-    secrets:
-      - mysql_db_password
-    networks:
-      - database
 
   # Service phpMyAdmin
   phpmyadmin:
-    image: phpmyadmin:latest
-    container_name: phpmyadmin
+    # Version de l'image phpmyadmin
+    image: phpmyadmin:5.2
+    # Permet que le conteneur se redémarre tout le temps s'il est dans l'état stop
     restart: always
+    # Permet que le service de backup démarre après la bd
+    depends_on:
+      - db
+    # Permet de faire le lien avec le fichier qui stocke les variables d'environnement
     env_file:
       - "configmap.env"
+    # Variables d'environnement recupéré par secret
     environment:
       PMA_PASSWORD_FILE: /run/secrets/mysql_db_password
     secrets:
       - mysql_db_password
     ports:
       - "8083:80"
-    depends_on:
-      - db
+    # Réseaux sur lequel sont connectés les base de données mysql
     networks:
       - database
 
+
+  # Application Spring Boot v1
+  spring-appv1:
+    # Permet de construire l'image docker du l'application spring à partir du Dockerfile
+    build:
+      context: .
+      dockerfile: Dockerfile
+    # Permet que le service de backup démarre après la bd
+    depends_on:
+      - db
+    # Permet de faire le lien avec le fichier qui stocke les variables d'environnement
+    env_file:
+      - "configmap.env"
+    # Variables d'environnement recupéré par secret
+    environment:
+      SPRING_DATASOURCE_PASSWORD_FILE: /run/secrets/mysql_db_password
+    secrets:
+      - mysql_db_password
+    # Réseaux sur lequel sont connectés les base de données mysql
+    # Réseaux sur lequel est connecté le serveur sonar et sa base
+    # Réseaux sur lequel est connecté nginx
+    networks:
+      - database
+
+volumes:
+  mysql_data:
+    driver: local
+
+secrets:
+  mysql_db_password:
+    file: secret/mysql_db_password.txt
+  mysql_db_root_password:
+    file: secret/mysql_db_root_password.txt
+
 networks:
   database:
-    driver: bridge
-  frontend:
-    driver: bridge
-  backend:
     driver: bridge
