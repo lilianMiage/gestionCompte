@@ -1,5 +1,6 @@
 services:
   mysql_db:
+    container_name: mysql_db
     image: mysql:8
     restart: always
     environment:
@@ -11,6 +12,13 @@ services:
       - "3306:3306"
     networks:
       - mynetwork
+    volumes:
+      - ./script/init-db.sql:/docker-entrypoint-initdb.d/init-db.sql
+    healthcheck:
+      test: [ "CMD", "mysqladmin", "ping", "-h", "localhost" ]
+      interval: 10s
+      retries: 5
+      start_period: 10s
 
   spring_app:
     container_name: gestionCompteAPP
@@ -18,7 +26,8 @@ services:
       context: .
       dockerfile: Dockerfile
     depends_on:
-      - mysql_db
+      mysql_db:
+        condition: service_healthy
     environment:
       SPRING_DATASOURCE_URL: jdbc:mysql://mysql_db:3306/monAnnuaire?serverTimezone=UTC
       SPRING_DATASOURCE_USERNAME: lilian
@@ -38,15 +47,14 @@ services:
     restart: always
     # Permet que le service de backup démarre après la bd
     depends_on:
-      - mysql_db
-    # Permet de faire le lien avec le fichier qui stocke les variables d'environnement
-    env_file:
-      - "configmap.env"
+      mysql_db:
+        condition: service_healthy
     # Variables d'environnement recupéré par secret
     environment:
-      PMA_PASSWORD_FILE: /run/secrets/mysql_db_password
-    secrets:
-      - mysql_db_password
+      PMA_HOST: mysql_db
+      MYSQL_USER: lilian  # ← Ajout
+      MYSQL_PASSWORD: mysecret
+      MYSQL_ROOT_PASSWORD: rootpassword
     ports:
       - "8090:80"
     # Réseaux sur lequel sont connectés les base de données mysql
@@ -56,12 +64,6 @@ services:
 volumes:
   mysql_data:
     driver: local
-
-secrets:
-  mysql_db_password:
-    file: secret/mysql_db_password.txt
-  mysql_db_root_password:
-    file: secret/mysql_db_root_password.txt
 
 networks:
   mynetwork:
