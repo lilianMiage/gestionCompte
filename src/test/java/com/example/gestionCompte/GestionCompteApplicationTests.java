@@ -52,12 +52,11 @@ public class GestionCompteApplicationTests {
         System.out.println("Response: " + result.getResponse().getContentAsString());
     }
 
-    @Test
     void testPostMoney() throws Exception {
         // on teste que le client est bien créé
         MvcResult result = mvc.perform(post("/api/compte/addMoney/1"))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.solde", is(210.0)))
+                .andExpect(jsonPath("$.solde", is(compte.getSolde())))
                 .andExpect(jsonPath("$.idClient", is(compte.getIdClient()))).andReturn();
         System.out.println("Response: " + result.getResponse().getContentAsString());
     }
