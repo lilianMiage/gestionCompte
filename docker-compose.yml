@@ -1,38 +1,33 @@
 services:
-  # Service MySQL
-  db:
-    # Version de l'image mysql
-    image: mysql:8.4.3
-    # Permet que le conteneur se redémarre tout le temps s'il est dans l'état stop
+  mysql_db:
+    image: mysql:8
     restart: always
-    # Permet de renommer le conteneur
-    container_name: mysql_db
-    # Permet de faire le lien avec le fichier qui stocke les variables d'environnement
-    env_file:
-      - "configmap.env"
-    # Variables d'environnement recupéré par secret
     environment:
-      MYSQL_PASSWORD_FILE: /run/secrets/mysql_db_password
-      MYSQL_ROOT_PASSWORD_FILE: /run/secrets/mysql_db_root_password
-    secrets:
-      - mysql_db_password
-      - mysql_db_root_password
-    # Port exposé de la base de données
+      MYSQL_DATABASE: monAnnuaire
+      MYSQL_USER: lilian
+      MYSQL_PASSWORD: mysecret
+      MYSQL_ROOT_PASSWORD: rootpassword
     ports:
-      - '3307:3306'
-    volumes:
-      - mysql_data:/var/lib/mysql
-      # Volumes qui permet de charger le dump de la base de données
-      - ./script:/docker-entrypoint-initdb.d
-    # Réseaux sur lequel sont connectés les base de données mysql
+      - "3306:3306"
     networks:
-      - database
-    # Permet de voir si la base données est up ou pas grâce à la commande linux ping
-    healthcheck:
-      test: [ "CMD", "mysqladmin", "ping", "-h", "localhost" ]
-      timeout: 20s
-      retries: 10
+      - mynetwork
 
+  spring_app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    depends_on:
+      - mysql_db
+    environment:
+      SPRING_DATASOURCE_URL: jdbc:mysql://mysql_db:3306/monAnnuaire?serverTimezone=UTC
+      SPRING_DATASOURCE_USERNAME: lilian
+      SPRING_DATASOURCE_PASSWORD: mysecret
+      SPRING_JPA_PROPERTIES_HIBERNATE_DIALECT: org.hibernate.dialect.MySQL8Dialect
+      SPRING_JPA_HIBERNATE_DDL_AUTO: none
+    ports:
+      - "8081:8080"
+    networks:
+      - mynetwork
 
   # Service phpMyAdmin
   phpmyadmin:
@@ -42,7 +37,7 @@ services:
     restart: always
     # Permet que le service de backup démarre après la bd
     depends_on:
-      - db
+      - mysql_db
     # Permet de faire le lien avec le fichier qui stocke les variables d'environnement
     env_file:
       - "configmap.env"
@@ -55,31 +50,7 @@ services:
       - "8083:80"
     # Réseaux sur lequel sont connectés les base de données mysql
     networks:
-      - database
-
-
-  # Application Spring Boot v1
-  spring-appv1:
-    # Permet de construire l'image docker du l'application spring à partir du Dockerfile
-    build:
-      context: .
-      dockerfile: Dockerfile
-    # Permet que le service de backup démarre après la bd
-    depends_on:
-      - db
-    # Permet de faire le lien avec le fichier qui stocke les variables d'environnement
-    env_file:
-      - "configmap.env"
-    # Variables d'environnement recupéré par secret
-    environment:
-      SPRING_DATASOURCE_PASSWORD_FILE: /run/secrets/mysql_db_password
-    secrets:
-      - mysql_db_password
-    # Réseaux sur lequel sont connectés les base de données mysql
-    # Réseaux sur lequel est connecté le serveur sonar et sa base
-    # Réseaux sur lequel est connecté nginx
-    networks:
-      - database
+      - mynetwork
 
 volumes:
   mysql_data:
@@ -92,5 +63,4 @@ secrets:
     file: secret/mysql_db_root_password.txt
 
 networks:
-  database:
-    driver: bridge
+  mynetwork:

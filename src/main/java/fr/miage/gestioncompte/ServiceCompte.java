@@ -12,10 +12,6 @@ public class ServiceCompte {
     private RepoCompte repoCompte;
 
     public void createCompte(Compte compte) throws Exception {
-        Optional<Compte> compteOptional = repoCompte.findById(compte.getId());
-        if(compteOptional.isEmpty()){
-            throw new Exception("Compte doesn't exist");
-        }
         repoCompte.save(compte);
     }
 
